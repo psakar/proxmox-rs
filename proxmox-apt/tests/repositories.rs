@@ -318,6 +318,45 @@ fn test_check_repositories() -> Result<(), Error> {
 }
 
 #[test]
+fn test_check_repositories_derivative() -> Result<(), Error> {
+    let test_dir = std::env::current_dir()?.join("tests");
+    let read_dir = test_dir.join("sources.list.d");
+    let apt_lists_dir: PathBuf = test_dir.join("lists");
+
+    // Devuan 6 excalibur is based on Debian 13 trixie: its own suites are checked against that
+    let devuan_list = read_dir.join("devuan.list");
+    let mut file = APTRepositoryFile::new(&devuan_list)?.unwrap();
+    file.parse()?;
+
+    let path_string = devuan_list.into_os_string().into_string().unwrap();
+
+    let suite_info = |index, kind: &str, message: &str| APTRepositoryInfo {
+        path: path_string.clone(),
+        index,
+        property: Some("Suites".to_string()),
+        kind: kind.to_string(),
+        message: message.to_string(),
+    };
+
+    let mut expected_infos = vec![
+        suite_info(3, "warning", "old suite 'daedalus' configured!"),
+        suite_info(
+            4,
+            "ignore-pre-upgrade-warning",
+            "suite 'freia' should not be used in production!",
+        ),
+    ];
+    expected_infos.sort();
+
+    let mut infos = check_repositories(&[file], &DebianCodename::Trixie, &apt_lists_dir);
+    infos.sort();
+
+    assert_eq!(infos, expected_infos);
+
+    Ok(())
+}
+
+#[test]
 fn test_get_cached_origin() -> Result<(), Error> {
     let test_dir = std::env::current_dir()?.join("tests");
     let read_dir = test_dir.join("sources.list.d");

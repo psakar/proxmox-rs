@@ -1,0 +1,10 @@
+deb http://deb.devuan.org/merged excalibur main
+
+deb http://deb.devuan.org/merged excalibur-security main
+
+deb http://deb.devuan.org/merged excalibur-updates main
+
+# old and next releases
+deb http://deb.devuan.org/merged daedalus main
+
+deb http://deb.devuan.org/merged freia main

@@ -163,6 +163,18 @@ impl DebianCodename {
             _ => return None,
         })
     }
+
+    /// Debian release a suite named after a known derivative's release is based on, e.g.
+    /// `excalibur` (Devuan 6) for Trixie. Like [`Self::from_derivative`] without knowing the
+    /// derivative: their codenames don't collide with other releases', except where they map to
+    /// the same Debian release (Devuan 1 `jessie`).
+    pub fn from_derivative_suite(codename: &str) -> Option<Self> {
+        const DERIVATIVES: &[&str] = &["devuan"];
+
+        DERIVATIVES
+            .iter()
+            .find_map(|id| Self::from_derivative(id, codename))
+    }
 }
 
 impl<'de> Deserialize<'de> for DebianCodename {
@@ -1224,6 +1236,13 @@ mod tests {
         assert_eq!(DebianCodename::from_derivative("debian", "trixie"), None);
         assert_eq!(DebianCodename::from_derivative("devuan", "ceres"), None);
         assert_eq!(DebianCodename::from_derivative("ubuntu", "noble"), None);
+
+        assert_eq!(
+            DebianCodename::from_derivative_suite("excalibur"),
+            Some(DebianCodename::Trixie)
+        );
+        assert_eq!(DebianCodename::from_derivative_suite("trixie"), None);
+        assert_eq!(DebianCodename::from_derivative_suite("noble"), None);
     }
 
     /// HostProduct must serialize to the expected lowercase strings.
