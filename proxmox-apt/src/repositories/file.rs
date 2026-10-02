@@ -335,9 +335,13 @@ impl APTRepositoryFileImpl for APTRepositoryFile {
                     _ => (),
                 };
 
+                // a derivative's suites, e.g. Devuan's, by the Debian release they're based on
                 let codename: DebianCodename = match base_suite.try_into() {
                     Ok(codename) => codename,
-                    Err(_) => continue,
+                    Err(_) => match DebianCodename::from_derivative_suite(base_suite) {
+                        Some(codename) => codename,
+                        None => continue,
+                    },
                 };
 
                 if codename < *current_codename {
