@@ -346,6 +346,15 @@ fn test_check_repositories_derivative() -> Result<(), Error> {
             "suite 'freia' should not be used in production!",
         ),
     ];
+    for index in 0..5 {
+        expected_infos.push(APTRepositoryInfo {
+            path: path_string.clone(),
+            index,
+            property: None,
+            kind: "origin".to_string(),
+            message: "Devuan".to_string(),
+        });
+    }
     expected_infos.sort();
 
     let mut infos = check_repositories(&[file], &DebianCodename::Trixie, &apt_lists_dir);

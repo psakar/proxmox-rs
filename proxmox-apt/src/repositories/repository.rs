@@ -116,6 +116,10 @@ impl APTRepositoryImpl for APTRepository {
                 if host == "debian.org" || host.ends_with(".debian.org") {
                     return Some("Debian".to_string());
                 }
+
+                if host == "devuan.org" || host.ends_with(".devuan.org") {
+                    return Some("Devuan".to_string());
+                }
             }
         }
 
