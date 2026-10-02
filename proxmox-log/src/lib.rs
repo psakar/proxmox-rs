@@ -11,6 +11,7 @@ use tracing_subscriber::prelude::*;
 
 mod file_logger;
 mod pve_task_formatter;
+mod syslog_layer;
 mod tasklog_layer;
 
 pub mod builder;
@@ -110,26 +111,61 @@ impl LogContext {
     }
 }
 
-fn journald_or_stderr_layer<S>() -> Box<dyn tracing_subscriber::Layer<S> + Send + Sync>
+/// Log to journald; without it, e.g. on systems not running systemd, to syslog; if neither
+/// can be reached, to stderr.
+fn system_log_layer<S>() -> Box<dyn tracing_subscriber::Layer<S> + Send + Sync>
 where
     S: tracing::Subscriber,
     S: for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
-    match tracing_journald::layer() {
-        Ok(layer) => layer
-            .with_priority_mappings(PriorityMappings {
-                error: Priority::Error,
-                warn: Priority::Warning,
-                info: Priority::Informational,
-                debug: Priority::Debug,
-                trace: Priority::Debug,
-            })
+    let journald_err = match tracing_journald::layer() {
+        Ok(layer) => {
+            return layer
+                .with_priority_mappings(PriorityMappings {
+                    error: Priority::Error,
+                    warn: Priority::Warning,
+                    info: Priority::Informational,
+                    debug: Priority::Debug,
+                    trace: Priority::Debug,
+                })
+                .boxed();
+        }
+        Err(err) => err,
+    };
+
+    // same identifier as tracing_journald uses
+    let identifier = env::args_os()
+        .next()
+        .as_ref()
+        .and_then(|arg0| std::path::Path::new(arg0).file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
+    match syslog_layer::SyslogMakeWriter::new(
+        std::path::Path::new(syslog_layer::SYSLOG_SOCKET),
+        identifier,
+    ) {
+        Ok(writer) => tracing_subscriber::fmt::layer()
+            .event_format(plain_format())
+            .with_writer(writer)
             .boxed(),
-        Err(err) => {
-            eprintln!("Unable to open syslog: {err:?}");
+        Err(syslog_err) => {
+            eprintln!(
+                "Unable to open journald ({journald_err}) or syslog ({syslog_err}), logging to stderr"
+            );
             plain_stderr_layer().boxed()
         }
     }
+}
+
+/// The compact format without level, timestamp and target.
+fn plain_format()
+-> tracing_subscriber::fmt::format::Format<tracing_subscriber::fmt::format::Compact, ()> {
+    tracing_subscriber::fmt::format()
+        .with_level(false)
+        .without_time()
+        .with_target(false)
+        .compact()
 }
 
 fn plain_stderr_layer<S>() -> impl tracing_subscriber::Layer<S>
@@ -137,13 +173,8 @@ where
     S: tracing::Subscriber,
     S: for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
-    let format = tracing_subscriber::fmt::format()
-        .with_level(false)
-        .without_time()
-        .with_target(false)
-        .compact();
     tracing_subscriber::fmt::layer()
-        .event_format(format)
+        .event_format(plain_format())
         .with_writer(std::io::stderr)
 }
 

@@ -8,8 +8,8 @@ use tracing_subscriber::layer::Filter;
 use tracing_subscriber::layer::SubscriberExt;
 
 use crate::{
-    LogContext, get_env_variable, journald_or_stderr_layer, plain_stderr_layer,
-    pve_task_formatter::PveTaskFormatter, tasklog_layer::TasklogLayer,
+    LogContext, get_env_variable, plain_stderr_layer, pve_task_formatter::PveTaskFormatter,
+    system_log_layer, tasklog_layer::TasklogLayer,
 };
 ///
 /// Filter yielding `true` *outside* of worker tasks, *unless* the level is `ERROR`.
@@ -74,10 +74,11 @@ impl Logger {
 
     /// Print to journald.
     ///
-    /// If the journal cannot be opened, print to stderr instead.
+    /// If the journal cannot be opened, e.g. on systems not running systemd, print to syslog
+    /// instead, and if that cannot be opened either, to stderr.
     pub fn journald(mut self) -> Logger {
         self.layer.push(
-            journald_or_stderr_layer()
+            system_log_layer()
                 .with_filter(self.global_log_level)
                 .boxed(),
         );
@@ -86,12 +87,13 @@ impl Logger {
 
     /// Print to journald if no LogContext (we're not in a PBS workertask) is given.
     ///
-    /// If opening the journal fails, we fallback and print to stderr. We print to journald if
+    /// If opening the journal fails, we fallback and print to syslog, or else stderr, as with
+    /// [`Self::journald`]. We print to journald if
     /// no LogContext exists – which means we are not in a PBS workertask – or the level of the
     /// log message is 'ERROR'.
     pub fn journald_on_no_workertask(mut self) -> Logger {
         self.layer.push(
-            journald_or_stderr_layer()
+            system_log_layer()
                 .with_filter(NoWorkerTask)
                 .with_filter(self.global_log_level)
                 .boxed(),
