@@ -145,6 +145,24 @@ impl DebianCodename {
             Self::Duke | Self::Unknown(_) => return None,
         })
     }
+
+    /// Debian release a Debian derivative's release is based on, by the derivative's
+    /// `/etc/os-release` `ID` and `VERSION_CODENAME` (case-insensitive). `None` for Debian
+    /// itself and for unknown derivatives or releases.
+    pub fn from_derivative(id: &str, codename: &str) -> Option<Self> {
+        let id = id.to_ascii_lowercase();
+        let codename = codename.to_ascii_lowercase();
+        Some(match (id.as_str(), codename.as_str()) {
+            ("devuan", "jessie") => Self::Jessie,
+            ("devuan", "ascii") => Self::Stretch,
+            ("devuan", "beowulf") => Self::Buster,
+            ("devuan", "chimaera") => Self::Bullseye,
+            ("devuan", "daedalus") => Self::Bookworm,
+            ("devuan", "excalibur") => Self::Trixie,
+            ("devuan", "freia") => Self::Forky,
+            _ => return None,
+        })
+    }
 }
 
 impl<'de> Deserialize<'de> for DebianCodename {
@@ -1185,6 +1203,27 @@ mod tests {
         let parsed: DebianCodename = serde_json::from_str("\"zurichish\"").unwrap();
         assert_eq!(parsed, DebianCodename::Unknown("zurichish".into()));
         assert_eq!(parsed.to_string(), "zurichish");
+    }
+
+    /// Derivative releases map to the Debian release they're based on, case-insensitively.
+    #[test]
+    fn debian_codename_from_derivative() {
+        for (id, codename, expected) in [
+            ("devuan", "ascii", DebianCodename::Stretch),
+            ("devuan", "daedalus", DebianCodename::Bookworm),
+            ("devuan", "excalibur", DebianCodename::Trixie),
+            ("Devuan", "Excalibur", DebianCodename::Trixie),
+            ("devuan", "freia", DebianCodename::Forky),
+        ] {
+            assert_eq!(
+                DebianCodename::from_derivative(id, codename),
+                Some(expected)
+            );
+        }
+        // Debian itself, unknown releases and unknown derivatives aren't mapped.
+        assert_eq!(DebianCodename::from_derivative("debian", "trixie"), None);
+        assert_eq!(DebianCodename::from_derivative("devuan", "ceres"), None);
+        assert_eq!(DebianCodename::from_derivative("ubuntu", "noble"), None);
     }
 
     /// HostProduct must serialize to the expected lowercase strings.
